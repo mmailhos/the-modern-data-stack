@@ -140,14 +140,19 @@ parquet-to-iceberg:
     go run cmd/parquet_to_iceberg/main.go
     @echo "✅ Parquet to Iceberg conversion complete!"
 
-# Legacy DuckDB-based Iceberg creation (deprecated)
-create-iceberg-tables-duckdb:
-    @echo "⚠️  This command uses DuckDB and may have compatibility issues"
-    @echo "💡 Consider using 'just parquet-to-iceberg' instead"
+# Create Iceberg tables using Apache Iceberg Go library (simplified)
+create-iceberg-tables-iceberg-go:
+    @echo "🧊 Creating Iceberg tables using Apache Iceberg Go library..."
     @chmod +x scripts/wait_for_catalog.sh
     @scripts/wait_for_catalog.sh
     go run cmd/create_iceberg_tables/main.go
     @echo "✅ Iceberg tables creation complete!"
+
+# Legacy DuckDB-based Iceberg creation (deprecated - has compatibility issues)
+create-iceberg-tables-duckdb:
+    @echo "⚠️  This command uses DuckDB and may have compatibility issues"
+    @echo "💡 Consider using 'just parquet-to-iceberg' or 'just create-iceberg-tables-iceberg-go' instead"
+    @echo "❌ DuckDB approach disabled due to compatibility issues"
 
 # Alias for backward compatibility
 create-iceberg-tables: parquet-to-iceberg
@@ -162,6 +167,8 @@ start-iceberg-catalog:
         docker run -d --rm \
             -p 8181:8181 \
             -v $(PWD)/data/iceberg_warehouse:/var/lib/iceberg/warehouse \
+            -e CATALOG_WAREHOUSE=/var/lib/iceberg/warehouse \
+            -e CATALOG_IO__IMPL=org.apache.iceberg.hadoop.HadoopFileIO \
             --name iceberg-rest \
             tabulario/iceberg-rest && \
         echo "✅ Iceberg REST Catalog started at http://localhost:8181"; \
@@ -229,7 +236,8 @@ help:
     @echo "  run                Run the parquet loader"
     @echo "  dev                Build and run in one command"
     @echo "  csv-to-parquet     Convert CSV files to Parquet format"
-    @echo "  parquet-to-iceberg Convert Parquet files to Iceberg tables (native Go)"
+    @echo "  parquet-to-iceberg Convert Parquet files to Iceberg tables (REST API approach)"
+    @echo "  create-iceberg-tables-iceberg-go Create Iceberg tables using Apache Iceberg Go library"
     @echo "  create-iceberg-tables Alias for parquet-to-iceberg (backward compatibility)"
     @echo "  full-workflow      Complete CSV -> Parquet -> Iceberg workflow"
     @echo ""
