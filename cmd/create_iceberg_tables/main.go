@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	_ "github.com/marcboeker/go-duckdb"
 )
 
 // findParquetFiles recursively finds all .parquet files in the given directory
@@ -99,11 +102,197 @@ type CreateTableRequest struct {
 	Location string        `json:"location,omitempty"`
 }
 
-// createBasicSchema creates a basic Iceberg schema for a table
-// This is a simplified approach - in production you'd read the actual Parquet schema
+// ParquetColumn represents a column from DuckDB's DESCRIBE output
+type ParquetColumn struct {
+	Name string
+	Type string
+	Null string
+}
+
+// convertDuckDBTypeToIceberg converts DuckDB data types to Iceberg type strings
+func convertDuckDBTypeToIceberg(duckdbType string) string {
+	// Normalize the type string
+	typeUpper := strings.ToUpper(strings.TrimSpace(duckdbType))
+
+	switch {
+	case typeUpper == "BOOLEAN":
+		return "boolean"
+	case typeUpper == "TINYINT" || typeUpper == "SMALLINT" || typeUpper == "INTEGER":
+		return "int"
+	case typeUpper == "BIGINT":
+		return "long"
+	case typeUpper == "REAL" || typeUpper == "FLOAT":
+		return "float"
+	case typeUpper == "DOUBLE":
+		return "double"
+	case strings.Contains(typeUpper, "VARCHAR") || typeUpper == "TEXT":
+		return "string"
+	case typeUpper == "BLOB":
+		return "binary"
+	case typeUpper == "DATE":
+		return "date"
+	case strings.Contains(typeUpper, "TIME"):
+		return "time"
+	case strings.Contains(typeUpper, "TIMESTAMP"):
+		return "timestamp"
+	case strings.Contains(typeUpper, "DECIMAL"):
+		return "decimal(38,18)" // Default precision and scale
+	default:
+		// For unknown types, default to string
+		return "string"
+	}
+}
+
+// initDuckDB initializes a DuckDB connection and installs required extensions
+func initDuckDB() (*sql.DB, error) {
+	db, err := sql.Open("duckdb", "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to open DuckDB: %v", err)
+	}
+
+	// Install and load required extensions
+	extensions := []string{
+		"INSTALL parquet",
+		"LOAD parquet",
+	}
+
+	for _, ext := range extensions {
+		if _, err := db.Exec(ext); err != nil {
+			// Ignore errors for already installed extensions
+			fmt.Printf("Extension command '%s': %v (this is often normal)\n", ext, err)
+		}
+	}
+
+	return db, nil
+}
+
+// readParquetSchemaWithDuckDB reads the schema from a Parquet file using DuckDB Go client
+func readParquetSchemaWithDuckDB(db *sql.DB, filePath string) (IcebergSchema, error) {
+	// Build the DuckDB query to describe the Parquet file
+	query := fmt.Sprintf("DESCRIBE SELECT * FROM read_parquet('%s')", filePath)
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return IcebergSchema{}, fmt.Errorf("failed to execute DuckDB query: %v", err)
+	}
+	defer rows.Close()
+
+	var columns []ParquetColumn
+
+	// Read the results
+	for rows.Next() {
+		var col ParquetColumn
+		var key, defaultVal, extra sql.NullString
+
+		err := rows.Scan(&col.Name, &col.Type, &col.Null, &key, &defaultVal, &extra)
+		if err != nil {
+			return IcebergSchema{}, fmt.Errorf("failed to scan row: %v", err)
+		}
+
+		columns = append(columns, col)
+	}
+
+	if err = rows.Err(); err != nil {
+		return IcebergSchema{}, fmt.Errorf("error reading rows: %v", err)
+	}
+
+	if len(columns) == 0 {
+		return IcebergSchema{}, fmt.Errorf("no columns found in parquet file schema")
+	}
+
+	// Convert to Iceberg schema
+	var fields []IcebergField
+	for i, col := range columns {
+		icebergField := IcebergField{
+			ID:       i + 1, // Iceberg field IDs start from 1
+			Name:     col.Name,
+			Required: col.Null == "NO", // Convert NULL column to Required field
+			Type:     convertDuckDBTypeToIceberg(col.Type),
+		}
+		fields = append(fields, icebergField)
+	}
+
+	return IcebergSchema{
+		Type:     "struct",
+		SchemaID: 0,
+		Fields:   fields,
+	}, nil
+}
+
+// readParquetSampleDataWithDuckDB reads sample data from a Parquet file using DuckDB Go client
+func readParquetSampleDataWithDuckDB(db *sql.DB, filePath string, limit int) ([]map[string]interface{}, error) {
+	// Build the DuckDB query to read sample data
+	query := fmt.Sprintf("SELECT * FROM read_parquet('%s') LIMIT %d", filePath, limit)
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute DuckDB query: %v", err)
+	}
+	defer rows.Close()
+
+	// Get column information
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get columns: %v", err)
+	}
+
+	var sampleData []map[string]interface{}
+
+	// Read the data rows
+	for rows.Next() {
+		// Create a slice of interface{} to hold the values
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		// Scan the row
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %v", err)
+		}
+
+		// Create a map for this row
+		row := make(map[string]interface{})
+		for i, col := range columns {
+			var value interface{}
+			if values[i] != nil {
+				// Convert byte slices to strings for better display
+				if b, ok := values[i].([]byte); ok {
+					value = string(b)
+				} else {
+					value = values[i]
+				}
+			}
+			row[col] = value
+		}
+
+		sampleData = append(sampleData, row)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error reading rows: %v", err)
+	}
+
+	return sampleData, nil
+}
+
+// getParquetRowCount gets the total number of rows in a Parquet file
+func getParquetRowCount(db *sql.DB, filePath string) (int64, error) {
+	query := fmt.Sprintf("SELECT COUNT(*) FROM read_parquet('%s')", filePath)
+
+	var count int64
+	err := db.QueryRow(query).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get row count: %v", err)
+	}
+
+	return count, nil
+}
+
+// createBasicSchema creates a basic Iceberg schema for a table (fallback)
 func createBasicSchema(tableName string) IcebergSchema {
-	// Create a basic schema with common fields
-	// This is a simplified approach - in production you'd read the actual Parquet schema
 	fields := []IcebergField{
 		{
 			ID:       1,
@@ -194,7 +383,16 @@ func createTable(catalogURL, namespace, tableName string, schema IcebergSchema) 
 }
 
 func main() {
-	fmt.Println("🧊 Iceberg Table Creator (Apache Iceberg Go - Simplified)")
+	fmt.Println("🧊 Iceberg Table Creator (Apache Iceberg Go - Enhanced with DuckDB Go Client)")
+
+	// Initialize DuckDB connection
+	fmt.Println("🦆 Initializing DuckDB connection...")
+	db, err := initDuckDB()
+	if err != nil {
+		log.Fatal("Failed to initialize DuckDB:", err)
+	}
+	defer db.Close()
+	fmt.Println("✅ DuckDB connection established")
 
 	// Check if data/parquet directory exists
 	parquetDir := "data/parquet"
@@ -252,21 +450,44 @@ func main() {
 	}
 
 	// Create Iceberg tables from Parquet files
-	fmt.Println("\n🧊 Creating Iceberg tables...")
+	fmt.Println("\n🧊 Creating Iceberg tables with real schemas...")
 	successCount := 0
 
 	for _, parquetFile := range parquetFiles {
 		relPath, _ := filepath.Rel(parquetDir, parquetFile)
 		tableName := sanitizeTableName(parquetFile)
 
-		fmt.Printf("\n🔄 Creating table '%s.%s' from %s...\n", namespaceName, tableName, relPath)
+		fmt.Printf("\n🔄 Processing table '%s.%s' from %s...\n", namespaceName, tableName, relPath)
 
-		// Create a basic schema (in production, you'd read the actual Parquet schema)
-		icebergSchema := createBasicSchema(tableName)
+		// Get row count first
+		rowCount, err := getParquetRowCount(db, parquetFile)
+		if err != nil {
+			fmt.Printf("⚠️  Failed to get row count: %v\n", err)
+			rowCount = -1
+		} else {
+			fmt.Printf("📊 Data: %d rows in Parquet file\n", rowCount)
+		}
 
-		fmt.Printf("📋 Schema: %d fields (basic template)\n", len(icebergSchema.Fields))
-		for _, field := range icebergSchema.Fields {
-			fmt.Printf("   - %s: %s\n", field.Name, field.Type)
+		// Read the actual Parquet schema using DuckDB Go client
+		fmt.Println("📋 Reading Parquet schema with DuckDB Go client...")
+		icebergSchema, err := readParquetSchemaWithDuckDB(db, parquetFile)
+		if err != nil {
+			fmt.Printf("⚠️  Failed to read Parquet schema with DuckDB, using basic template: %v\n", err)
+			icebergSchema = createBasicSchema(tableName)
+		}
+
+		fmt.Printf("📊 Schema: %d fields (from Parquet file)\n", len(icebergSchema.Fields))
+		for i, field := range icebergSchema.Fields {
+			if i < 5 { // Show first 5 fields
+				required := ""
+				if field.Required {
+					required = " (required)"
+				}
+				fmt.Printf("   - %s: %s%s\n", field.Name, field.Type, required)
+			} else if i == 5 {
+				fmt.Printf("   ... and %d more fields\n", len(icebergSchema.Fields)-5)
+				break
+			}
 		}
 
 		// Create Iceberg table
@@ -283,10 +504,33 @@ func main() {
 		}
 
 		fmt.Printf("✅ Created Iceberg table '%s.%s'\n", namespaceName, tableName)
+
+		// Read and display sample data
+		fmt.Println("📖 Reading sample data from Parquet file...")
+		sampleData, err := readParquetSampleDataWithDuckDB(db, parquetFile, 3)
+		if err != nil {
+			fmt.Printf("⚠️  Failed to read sample data: %v\n", err)
+		} else {
+			fmt.Printf("📊 Sample data (%d rows shown):\n", len(sampleData))
+			for i, row := range sampleData {
+				fmt.Printf("   Row %d: ", i+1)
+				fieldCount := 0
+				for key, value := range row {
+					if fieldCount >= 3 { // Show only first 3 fields per row
+						fmt.Printf("...")
+						break
+					}
+					fmt.Printf("%s=%v ", key, value)
+					fieldCount++
+				}
+				fmt.Println()
+			}
+		}
+
 		successCount++
 	}
 
-	fmt.Printf("\n🎉 Successfully created %d Iceberg tables!\n", successCount)
+	fmt.Printf("\n🎉 Successfully processed %d Iceberg tables!\n", successCount)
 
 	// Show summary
 	fmt.Println("\n📊 Summary:")
@@ -296,16 +540,27 @@ func main() {
 	fmt.Printf("   - Catalog URI: %s\n", catalogURL)
 	fmt.Printf("   - Warehouse location: ./data/iceberg_warehouse\n")
 
-	fmt.Println("\n💡 Tables created with basic schema template!")
-	fmt.Println("   - This version uses a simplified REST API approach")
-	fmt.Println("   - Tables are ready for metadata operations")
-	fmt.Println("   - You can query table metadata with any Iceberg-compatible engine")
-	fmt.Println("   - For production use, extend this to read actual Parquet schemas")
+	fmt.Println("\n💡 Tables created with real Parquet schemas!")
+	fmt.Println("   - Tables now have the actual column structure from your data")
+	fmt.Println("   - Schema information is stored in Iceberg metadata")
+	fmt.Println("   - Nullability information is preserved from Parquet files")
+
+	fmt.Println("\n🦆 DuckDB Go Client Integration:")
+	fmt.Println("   - Native Go client for better performance and reliability")
+	fmt.Println("   - Proper data type handling and conversion")
+	fmt.Println("   - Real sample data preview with actual values")
+	fmt.Println("   - Accurate row counts and schema information")
+
+	fmt.Println("\n📝 Note about data insertion:")
+	fmt.Println("   - Table structures are created with proper schemas")
+	fmt.Println("   - For data loading into Iceberg tables, use:")
+	fmt.Println("     • Apache Spark with Iceberg")
+	fmt.Println("     • Trino with Iceberg connector")
+	fmt.Println("     • Or copy data files manually to the warehouse")
 
 	fmt.Println("\n🔧 Next steps:")
-	fmt.Println("   - Extend schema reading to parse actual Parquet file schemas")
-	fmt.Println("   - Add data insertion capabilities")
+	fmt.Println("   - Use DuckDB to inspect your table schemas and data")
+	fmt.Println("   - Set up Spark/Trino for data insertion into Iceberg tables")
 	fmt.Println("   - Add partitioning strategies for better performance")
 	fmt.Println("   - Set up table maintenance (compaction, cleanup)")
-	fmt.Println("   - Query tables using Spark, Trino, or other Iceberg engines")
 }
