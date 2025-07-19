@@ -60,23 +60,8 @@ func main() {
 
 	fmt.Println("✅ Connected to DuckDB successfully")
 
-	// Install and load required extensions
-	fmt.Println("🔧 Installing required extensions...")
-
-	extensions := []string{"iceberg", "httpfs"}
-	for _, ext := range extensions {
-		_, err := db.Exec(fmt.Sprintf("INSTALL %s;", ext))
-		if err != nil {
-			log.Printf("Warning: Failed to install %s extension: %v", ext, err)
-		}
-
-		_, err = db.Exec(fmt.Sprintf("LOAD %s;", ext))
-		if err != nil {
-			log.Printf("Warning: Failed to load %s extension: %v", ext, err)
-		}
-	}
-
-	fmt.Println("✅ Extensions loaded successfully")
+	// No extensions needed for Parquet conversion
+	fmt.Println("🔧 Ready for Parquet conversion...")
 
 	// Check if data directory exists and has CSV files
 	dataDir := "data"
@@ -108,10 +93,10 @@ func main() {
 		fmt.Printf("   - %s\n", relPath)
 	}
 
-	// Create Iceberg output directory
-	icebergDir := "iceberg_tables"
-	if err := os.MkdirAll(icebergDir, 0755); err != nil {
-		log.Fatal("Failed to create Iceberg directory:", err)
+	// Create Parquet output directory
+	parquetDir := "data/parquet"
+	if err := os.MkdirAll(parquetDir, 0755); err != nil {
+		log.Fatal("Failed to create Parquet directory:", err)
 	}
 
 	// Process each CSV file
@@ -148,45 +133,29 @@ func main() {
 
 		fmt.Printf("📈 Loaded %d rows from %s\n", rowCount, relPath)
 
-		// Create Iceberg table path
-		icebergTablePath := filepath.Join(icebergDir, tableName)
-		absIcebergPath, err := filepath.Abs(icebergTablePath)
+		// Create Parquet table path
+		parquetPath := filepath.Join(parquetDir, tableName+".parquet")
+		absParquetPath, err := filepath.Abs(parquetPath)
 		if err != nil {
-			log.Printf("Failed to get absolute path for Iceberg table: %v", err)
+			log.Printf("Failed to get absolute path for Parquet table: %v", err)
 			continue
 		}
 
-		// Create Iceberg table
-		fmt.Printf("🧊 Creating Iceberg table at %s...\n", icebergTablePath)
+		// Create Parquet table
+		fmt.Printf("📦 Creating Parquet table at %s...\n", parquetPath)
 
-		// Copy data to Iceberg format
-		copyToIcebergSQL := fmt.Sprintf(`
-			COPY (SELECT * FROM %s) TO '%s' (FORMAT 'iceberg')
-		`, tempTableName, absIcebergPath)
+		// Copy data to Parquet format
+		copyToParquetSQL := fmt.Sprintf(`
+			COPY (SELECT * FROM %s) TO '%s' (FORMAT 'parquet')
+		`, tempTableName, absParquetPath)
 
-		_, err = db.Exec(copyToIcebergSQL)
+		_, err = db.Exec(copyToParquetSQL)
 		if err != nil {
-			log.Printf("Failed to create Iceberg table for %s: %v", tableName, err)
-
-			// Fallback: try creating as Parquet with Iceberg-compatible structure
-			fmt.Printf("🔄 Fallback: Creating Parquet table for %s...\n", tableName)
-			parquetPath := filepath.Join(icebergDir, tableName+".parquet")
-			absParquetPath, _ := filepath.Abs(parquetPath)
-
-			copyToParquetSQL := fmt.Sprintf(`
-				COPY (SELECT * FROM %s) TO '%s' (FORMAT 'parquet')
-			`, tempTableName, absParquetPath)
-
-			_, err = db.Exec(copyToParquetSQL)
-			if err != nil {
-				log.Printf("Failed to create Parquet table for %s: %v", tableName, err)
-				continue
-			}
-
-			fmt.Printf("✅ Created Parquet table: %s\n", parquetPath)
-		} else {
-			fmt.Printf("✅ Successfully created Iceberg table: %s\n", icebergTablePath)
+			log.Printf("Failed to create Parquet table for %s: %v", tableName, err)
+			continue
 		}
+
+		fmt.Printf("✅ Created Parquet table: %s\n", parquetPath)
 
 		// Show sample data
 		fmt.Printf("📋 Sample data from %s:\n", tableName)
@@ -255,16 +224,16 @@ func main() {
 	}
 
 	fmt.Println("🎉 All CSV files processed successfully!")
-	fmt.Printf("📁 Iceberg/Parquet tables created in: %s\n", icebergDir)
+	fmt.Printf("📁 Parquet tables created in: %s\n", parquetDir)
 
 	// Show summary
 	fmt.Println("\n📊 Summary:")
 	fmt.Printf("   - Input directory: %s\n", dataDir)
-	fmt.Printf("   - Output directory: %s\n", icebergDir)
+	fmt.Printf("   - Output directory: %s\n", parquetDir)
 	fmt.Printf("   - CSV files processed: %d\n", len(csvFiles))
 
 	// List created files
-	if files, err := os.ReadDir(icebergDir); err == nil {
+	if files, err := os.ReadDir(parquetDir); err == nil {
 		fmt.Println("   - Created files:")
 		for _, file := range files {
 			fmt.Printf("     • %s\n", file.Name())

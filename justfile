@@ -31,8 +31,8 @@ dev: build run
 # Clean build artifacts
 clean:
     @echo "🧹 Cleaning build artifacts..."
-    rm -f altertable csv-to-iceberg
-    rm -rf iceberg_tables
+    rm -f altertable csv-to-parquet parquet-to-iceberg create-iceberg-tables-duckdb
+    rm -rf data/parquet data/iceberg_warehouse
     go clean
     @echo "✅ Clean complete!"
 
@@ -126,29 +126,120 @@ cross-compile:
     GOOS=windows GOARCH=amd64 go build -o altertable-windows-amd64.exe .
     @echo "✅ Cross-compilation complete!"
 
-# Convert CSV files to Iceberg format
-csv-to-iceberg:
-    @echo "🧊 Converting CSV files to Iceberg format..."
-    go run cmd/csv_to_iceberg/main.go
-    @echo "✅ CSV to Iceberg conversion complete!"
+# Convert CSV files to Parquet format
+csv-to-parquet:
+    @echo "📦 Converting CSV files to Parquet format..."
+    go run cmd/csv_to_parquet/main.go
+    @echo "✅ CSV to Parquet conversion complete!"
 
-# Build the CSV to Iceberg converter
-build-csv-converter:
-    @echo "🔨 Building CSV to Iceberg converter..."
-    go build -o csv-to-iceberg cmd/csv_to_iceberg/main.go
-    @echo "✅ CSV converter build complete!"
+# Create Iceberg tables from Parquet files (native Go)
+parquet-to-iceberg:
+    @echo "🧊 Converting Parquet files to Iceberg tables..."
+    @chmod +x scripts/wait_for_catalog.sh
+    @scripts/wait_for_catalog.sh
+    go run cmd/parquet_to_iceberg/main.go
+    @echo "✅ Parquet to Iceberg conversion complete!"
+
+# Legacy DuckDB-based Iceberg creation (deprecated)
+create-iceberg-tables-duckdb:
+    @echo "⚠️  This command uses DuckDB and may have compatibility issues"
+    @echo "💡 Consider using 'just parquet-to-iceberg' instead"
+    @chmod +x scripts/wait_for_catalog.sh
+    @scripts/wait_for_catalog.sh
+    go run cmd/create_iceberg_tables/main.go
+    @echo "✅ Iceberg tables creation complete!"
+
+# Alias for backward compatibility
+create-iceberg-tables: parquet-to-iceberg
+
+# Start Iceberg REST Catalog with Docker
+start-iceberg-catalog:
+    @echo "🐳 Starting Iceberg REST Catalog..."
+    @mkdir -p data/iceberg_warehouse
+    @if docker ps --format "table {{{{.Names}}}}" | grep -q "iceberg-rest"; then \
+        echo "✅ Iceberg REST Catalog is already running at http://localhost:8181"; \
+    else \
+        docker run -d --rm \
+            -p 8181:8181 \
+            -v $(PWD)/data/iceberg_warehouse:/var/lib/iceberg/warehouse \
+            --name iceberg-rest \
+            tabulario/iceberg-rest && \
+        echo "✅ Iceberg REST Catalog started at http://localhost:8181"; \
+    fi
+    @echo "📁 Warehouse location: ./data/iceberg_warehouse"
+
+# Stop Iceberg REST Catalog
+stop-iceberg-catalog:
+    @echo "🛑 Stopping Iceberg REST Catalog..."
+    @if docker ps --format "table {{{{.Names}}}}" | grep -q "iceberg-rest"; then \
+        docker stop iceberg-rest && echo "✅ Iceberg REST Catalog stopped"; \
+    else \
+        echo "ℹ️  Iceberg REST Catalog is not running"; \
+    fi
+
+# Check Iceberg REST Catalog status
+status-iceberg-catalog:
+    @echo "📊 Iceberg REST Catalog Status:"
+    @if docker ps --format "table {{{{.Names}}}}" | grep -q "iceberg-rest"; then \
+        echo "✅ Running at http://localhost:8181"; \
+        docker ps --filter name=iceberg-rest; \
+    else \
+        echo "❌ Not running"; \
+        echo "💡 Run 'just start-iceberg-catalog' to start it"; \
+    fi
+
+# Check prerequisites (Docker, etc.)
+check-prereqs:
+    @echo "🔍 Checking prerequisites..."
+    @chmod +x scripts/check_docker.sh
+    @scripts/check_docker.sh check
+    @echo ""
+    @scripts/check_docker.sh catalog
+
+# Full workflow: CSV -> Parquet -> Iceberg
+full-workflow:
+    @echo "🚀 Running full workflow: CSV -> Parquet -> Iceberg"
+    just check-prereqs
+    just csv-to-parquet
+    just start-iceberg-catalog
+    just parquet-to-iceberg
+    @echo "🎉 Full workflow complete!"
+
+# Build all converters
+build-converters:
+    @echo "🔨 Building all converters..."
+    go build -o csv-to-parquet cmd/csv_to_parquet/main.go
+    go build -o parquet-to-iceberg cmd/parquet_to_iceberg/main.go
+    go build -o create-iceberg-tables-duckdb cmd/create_iceberg_tables/main.go
+    @echo "✅ All converters built!"
 
 # Show help
 help:
-    @echo "🔧 Altertable - Parquet to DuckDB loader & CSV to Iceberg converter"
+    @echo "🔧 Altertable - Data processing with DuckDB, Parquet & Iceberg"
     @echo ""
     @echo "Usage: just <command>"
     @echo ""
-    @echo "Commands:"
-    @echo "  build              Build the application"
-    @echo "  run                Run the application"
+    @echo "🔨 Build Commands:"
+    @echo "  build              Build the main application"
+    @echo "  build-converters   Build all converter tools"
+    @echo "  release            Build optimized release version"
+    @echo "  cross-compile      Build for multiple platforms"
+    @echo ""
+    @echo "🚀 Run Commands:"
+    @echo "  run                Run the parquet loader"
     @echo "  dev                Build and run in one command"
-    @echo "  clean              Clean build artifacts"
+    @echo "  csv-to-parquet     Convert CSV files to Parquet format"
+    @echo "  parquet-to-iceberg Convert Parquet files to Iceberg tables (native Go)"
+    @echo "  create-iceberg-tables Alias for parquet-to-iceberg (backward compatibility)"
+    @echo "  full-workflow      Complete CSV -> Parquet -> Iceberg workflow"
+    @echo ""
+    @echo "🐳 Docker Commands:"
+    @echo "  start-iceberg-catalog Start Iceberg REST Catalog with Docker"
+    @echo "  stop-iceberg-catalog  Stop Iceberg REST Catalog"
+    @echo "  status-iceberg-catalog Check Iceberg REST Catalog status"
+    @echo ""
+    @echo "🛠️  Development Commands:"
+    @echo "  clean              Clean build artifacts and generated files"
     @echo "  test               Run tests"
     @echo "  fmt                Format code"
     @echo "  lint               Run linter"
@@ -159,11 +250,11 @@ help:
     @echo "  info               Show project information"
     @echo "  install-tools      Install development tools"
     @echo "  setup              Full development setup"
-    @echo "  release            Build optimized release version"
-    @echo "  cross-compile      Build for multiple platforms"
-    @echo "  csv-to-iceberg     Convert CSV files to Iceberg format"
-    @echo "  build-csv-converter Build CSV to Iceberg converter"
     @echo "  help               Show this help"
     @echo ""
-    @echo "📁 Make sure to place your .parquet files in the 'data' directory"
-    @echo "🧊 Use 'just csv-to-iceberg' to convert CSV files to Iceberg format" 
+    @echo "📁 Workflow:"
+    @echo "  1. Place CSV files in the 'data' directory"
+    @echo "  2. Run 'just csv-to-parquet' → creates files in 'data/parquet/'"
+    @echo "  3. Run 'just start-iceberg-catalog' to start the catalog"
+    @echo "  4. Run 'just create-iceberg-tables' to create Iceberg tables"
+    @echo "  Or use 'just full-workflow' to do all steps automatically" 

@@ -33,3 +33,4 @@ go.work.sum
 data/
 *.npz
 iceberg_tables/
+db
