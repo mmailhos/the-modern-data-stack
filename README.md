@@ -1,223 +1,262 @@
-# Altertable
+# Altertable - Data Processing Pipeline
 
-A comprehensive Go application for data processing with DuckDB, Parquet, and Apache Iceberg:
+A comprehensive Go application for processing data through a modern analytics pipeline:
 
-1. **Parquet to DuckDB**: Load parquet files from `data/` directory into DuckDB and display the data
-2. **CSV to Parquet**: Convert CSV files from `data/` directory to efficient Parquet format
-3. **Iceberg Tables**: Create Apache Iceberg tables from Parquet files using an Iceberg REST Catalog
+**CSV → Parquet → Iceberg Tables → Analytics**
 
-## Features
+## 🎯 Overview
 
-### Original Functionality
-- Load parquet files from `data/` directory
-- Load them into DuckDB as tables
-- Use the DuckDB API to list all rows on STDOUT
+Altertable provides a complete data processing pipeline that transforms your CSV data into queryable Iceberg tables:
 
-### CSV to Parquet Converter
-- Automatically discover all CSV files in the `data/` directory
-- Convert each CSV file to Parquet format using DuckDB
-- Display sample data from each processed file
-- Create organized output in `data/parquet/` directory
+1. **📦 CSV to Parquet**: Convert CSV files to efficient Parquet format using DuckDB
+2. **🧊 Parquet to Iceberg**: Create Apache Iceberg tables with proper schemas
+3. **🔍 Query & Analysis**: Query tables using DuckDB, Spark, Trino, or any Iceberg-compatible engine
 
-### Iceberg Tables Creator
-- Create Apache Iceberg tables from Parquet files
-- Uses Iceberg REST Catalog for metadata management
-- Supports schema evolution and ACID transactions
-- Compatible with any Iceberg-enabled query engine
-- Docker-based catalog setup for easy development
+## 🚀 Quick Start
 
-## Quick Start
+### Prerequisites
 
-### Using Just (Recommended)
+- **Go 1.19+**: For building the applications
+- **Docker**: For running the Iceberg REST Catalog
+- **DuckDB**: For querying (optional, but recommended)
+
+### Complete Workflow
 
 ```bash
-# Install dependencies
+# 1. Setup and dependencies
 just deps
+just setup-data
 
-# Run the original parquet loader
-just run
+# 2. Place your CSV files in data/source/
 
-# Convert CSV files to Parquet format
-just csv-to-parquet
-
-# Create Iceberg tables from Parquet files
-just start-iceberg-catalog  # Start the catalog service
-just create-iceberg-tables  # Create the tables
-
-# Or run the complete workflow
+# 3. Run the complete pipeline
 just full-workflow
 
-# Clean up generated files
-just clean
-
-# See all available commands
-just help
+# 4. Query your data
+just list-data
+just query-iceberg your_table_name
 ```
 
-### Manual Usage
+## 📋 Detailed Steps
+
+### Step 1: CSV to Parquet Conversion
+
+Convert your CSV files to efficient Parquet format:
 
 ```bash
-# Original parquet loader
-go run main.go
-
-# CSV to Parquet converter
-go run cmd/csv_to_parquet/main.go
-
-# Create Iceberg tables
-go run cmd/create_iceberg_tables/main.go
-
-# Build binaries
-go build -o altertable .
-go build -o csv-to-parquet cmd/csv_to_parquet/main.go
-go build -o create-iceberg-tables cmd/create_iceberg_tables/main.go
+# Place CSV files in data/source/
+# Then convert them:
+just csv-to-parquet
 ```
 
-## Directory Structure
+**What it does:**
+- Discovers all CSV files in `data/source/`
+- Uses DuckDB to convert each CSV to Parquet
+- Stores results in `data/parquet/`
+- Shows sample data and statistics
+
+### Step 2: Iceberg Table Creation
+
+Create Apache Iceberg tables from your Parquet files. Choose one approach:
+
+#### Option A: Enhanced DuckDB Approach (Recommended)
+```bash
+just start-iceberg-catalog
+just create-iceberg-tables
+```
+
+**Features:**
+- Uses native DuckDB Go client for schema reading
+- Reads actual Parquet schemas (not templates)
+- Shows real sample data with row counts
+- Preserves nullability constraints
+- Better error handling and performance
+
+#### Option B: REST API Approach
+```bash
+just start-iceberg-catalog
+just parquet-to-iceberg
+```
+
+**Features:**
+- Direct REST API communication
+- Template-based schema creation
+- Lightweight implementation
+
+### Step 3: Query and Analysis
+
+Query your Iceberg tables using various methods:
+
+```bash
+# List available tables
+just list-data
+
+# Query a specific table
+just query-iceberg transactions_sample
+
+# Show table schema
+just describe-iceberg transactions_sample
+
+# Direct DuckDB queries
+duckdb -c "LOAD iceberg; SET unsafe_enable_version_guessing = true; 
+  SELECT * FROM iceberg_scan('data/iceberg_warehouse/my_data/transactions_sample') LIMIT 10;"
+```
+
+## 🏗️ Architecture
+
+### Applications
+
+- **`cmd/csv_to_parquet/`**: CSV to Parquet converter using DuckDB
+- **`cmd/create_iceberg_tables/`**: Enhanced Iceberg table creator with native DuckDB Go client
+- **`cmd/parquet_to_iceberg/`**: Alternative REST API-based Iceberg creator
+
+### Data Flow
+
+```
+data/source/*.csv
+       ↓ (csv-to-parquet)
+data/parquet/*.parquet
+       ↓ (create-iceberg-tables)
+data/iceberg_warehouse/my_data/*
+       ↓ (query engines)
+    Analytics & Insights
+```
+
+### Directory Structure
 
 ```
 altertable/
-├── data/                          # Input CSV and Parquet files
-│   ├── *.csv                     # CSV files for conversion
-│   └── *.parquet                 # Parquet files for loading
-├── data/                          # Data directory
-│   ├── *.csv                     # Input CSV files
-│   ├── parquet/                  # Converted Parquet files
-│   │   └── *.parquet
-│   └── iceberg_warehouse/        # Iceberg table metadata and data
 ├── cmd/
-│   ├── csv_to_parquet/
-│   │   └── main.go               # CSV to Parquet converter
-│   └── create_iceberg_tables/
-│       └── main.go               # Iceberg tables creator
-├── scripts/
-│   └── check_docker.sh           # Docker availability checker
-├── main.go                       # Original parquet loader
-├── justfile                      # Task runner configuration
-└── README.md                     # This file
+│   ├── csv_to_parquet/         # CSV → Parquet converter
+│   ├── create_iceberg_tables/  # Enhanced Iceberg creator
+│   └── parquet_to_iceberg/     # Alternative Iceberg creator
+├── data/
+│   ├── source/                 # Input CSV files (you provide)
+│   ├── parquet/                # Generated Parquet files
+│   └── iceberg_warehouse/      # Iceberg table storage
+├── scripts/                    # Helper scripts
+└── justfile                    # Task automation
 ```
 
-## Dependencies
+## 🔧 Available Commands
 
-- Go 1.24+
-- DuckDB Go driver (`github.com/marcboeker/go-duckdb`)
-- Docker (for Iceberg REST Catalog)
-- DuckDB extensions: `iceberg` (automatically installed when needed)
-
-## CSV to Parquet Converter Details
-
-The CSV to Parquet converter:
-
-1. **Auto-Discovery**: Recursively finds all `.csv` files in the `data/` directory
-2. **Schema Detection**: Uses DuckDB's `read_csv_auto()` for automatic schema detection
-3. **Parquet Conversion**: Converts to efficient Parquet format using DuckDB
-4. **Data Preview**: Shows sample data from each processed file
-5. **Clean Output**: Organizes converted files in the `parquet_tables/` directory
-
-### Supported Data Types
-
-The converter automatically handles:
-- Numeric types (integers, floats)
-- Text/string data
-- Dates and timestamps
-- Boolean values
-- NULL values
-
-### Example Output
-
-```
-📊 Found 8 CSV file(s):
-   - transactions_sample.csv
-   - foyers_fiscaux.csv
-   - loyers.csv
-   ...
-
-🔄 Processing transactions_sample.csv -> table 'transactions_sample'...
-📈 Loaded 100 rows from transactions_sample.csv
-📦 Creating Parquet table at data/parquet/transactions_sample.parquet...
-✅ Created Parquet table: data/parquet/transactions_sample.parquet
-```
-
-## Iceberg Tables Creator Details
-
-The Iceberg tables creator:
-
-1. **Prerequisites Check**: Verifies Docker is available and running
-2. **Catalog Connection**: Connects to Iceberg REST Catalog at `http://localhost:8181`
-3. **Schema Creation**: Creates a schema named `my_data` for organizing tables
-4. **Table Creation**: Converts each Parquet file to an Iceberg table
-5. **Metadata Management**: Uses the REST Catalog for ACID transactions and schema evolution
-
-### Iceberg Benefits
-
-- **ACID Transactions**: Full ACID compliance for data integrity
-- **Schema Evolution**: Add, remove, or modify columns without breaking existing queries
-- **Time Travel**: Query historical versions of your data
-- **Partitioning**: Efficient data organization and pruning
-- **Metadata Management**: Centralized catalog for table discovery and management
-
-### Example Workflow
-
-```bash
-# 1. Start the Iceberg REST Catalog
-just start-iceberg-catalog
-
-# 2. Create Iceberg tables from existing Parquet files
-just create-iceberg-tables
-
-# Output:
-🔗 Connecting to Iceberg REST Catalog...
-✅ Connected to Iceberg REST Catalog
-📁 Creating schema 'my_data'...
-✅ Schema 'my_data' created successfully
-
-🧊 Creating Iceberg tables...
-🔄 Creating table 'my_data.transactions_sample' from transactions_sample.parquet...
-✅ Created table 'my_data.transactions_sample' with 100 rows
-```
-
-## Development
-
-### Available Just Commands
-
-- `just build` - Build the main application
-- `just run` - Run the parquet loader
+### Main Workflow
 - `just csv-to-parquet` - Convert CSV files to Parquet
-- `just create-iceberg-tables` - Create Iceberg tables from Parquet files
-- `just start-iceberg-catalog` - Start Iceberg REST Catalog with Docker (idempotent)
-- `just stop-iceberg-catalog` - Stop Iceberg REST Catalog (graceful)
-- `just status-iceberg-catalog` - Check Iceberg REST Catalog status
-- `just full-workflow` - Complete CSV → Parquet → Iceberg workflow
-- `just build-converters` - Build all converter binaries
-- `just check-prereqs` - Check Docker and other prerequisites
-- `just clean` - Clean build artifacts and output files
-- `just fmt` - Format Go code
-- `just lint` - Run linter
-- `just test` - Run tests
-- `just deps` - Download dependencies
-- `just help` - Show all available commands
+- `just create-iceberg-tables` - Create Iceberg tables (recommended)
+- `just parquet-to-iceberg` - Alternative Iceberg approach
+- `just full-workflow` - Complete pipeline automation
 
-### Building from Source
+### Catalog Management
+- `just start-iceberg-catalog` - Start Iceberg REST Catalog
+- `just status-iceberg-catalog` - Check catalog status
+- `just stop-iceberg-catalog` - Stop catalog
+
+### Data Inspection
+- `just list-data` - Show available data files
+- `just query-iceberg <table>` - Query table with DuckDB
+- `just describe-iceberg <table>` - Show table schema
+
+### Development
+- `just build` - Build all applications
+- `just clean` - Clean generated files
+- `just deps` - Manage dependencies
+- `just fmt` - Format code
+
+### Help
+- `just help` - Show comprehensive help
+- `just help-examples` - Show query examples
+- `just info` - Show project information
+
+## 📊 Example Usage
+
+### Processing Real Estate Data
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd altertable
+# 1. Place your CSV files
+cp transactions.csv data/source/
+cp properties.csv data/source/
 
-# Install dependencies
-go mod download
+# 2. Convert to Parquet
+just csv-to-parquet
+# Output: data/parquet/transactions.parquet, data/parquet/properties.parquet
 
-# Build all applications
-go build -o altertable .
-go build -o csv-to-parquet cmd/csv_to_parquet/main.go
-go build -o create-iceberg-tables cmd/create_iceberg_tables/main.go
+# 3. Create Iceberg tables
+just start-iceberg-catalog
+just create-iceberg-tables
+# Output: Iceberg tables in data/iceberg_warehouse/my_data/
+
+# 4. Query the data
+just query-iceberg transactions
+just describe-iceberg properties
+
+# 5. Advanced analytics
+duckdb -c "LOAD iceberg; SET unsafe_enable_version_guessing = true;
+  SELECT departement, AVG(prix) as avg_price 
+  FROM iceberg_scan('data/iceberg_warehouse/my_data/transactions') 
+  GROUP BY departement ORDER BY avg_price DESC LIMIT 10;"
 ```
 
-## Notes
+## 🔍 Features
 
-- Parquet format is natively supported by DuckDB without additional extensions
-- Large CSV files are processed efficiently using DuckDB's streaming capabilities
-- Iceberg tables provide ACID transactions, schema evolution, and time travel capabilities
-- The Iceberg REST Catalog runs in Docker for easy development and testing
-- Output files are organized in dedicated directories for easy access
-- Both Parquet and Iceberg formats provide excellent compression and query performance for analytics
-- Iceberg tables are compatible with Spark, Trino, Flink, and other query engines
+### CSV to Parquet Converter
+- ✅ Automatic CSV discovery
+- ✅ DuckDB-powered conversion
+- ✅ Sample data preview
+- ✅ Error handling for malformed files
+- ✅ Progress reporting
+
+### Enhanced Iceberg Creator
+- ✅ Native DuckDB Go client integration
+- ✅ Real Parquet schema reading
+- ✅ Actual sample data preview
+- ✅ Row count statistics
+- ✅ Nullability preservation
+- ✅ Type-safe operations
+- ✅ Better error handling
+
+### Query Integration
+- ✅ DuckDB Iceberg extension support
+- ✅ Schema inspection commands
+- ✅ Sample query helpers
+- ✅ Compatible with Spark, Trino, etc.
+
+## 🐳 Docker Integration
+
+The Iceberg REST Catalog runs in Docker with proper configuration:
+
+```bash
+# Automatically configured with:
+# - Persistent warehouse storage
+# - Proper environment variables
+# - Health checking
+```
+
+## 🔗 Dependencies
+
+- **Go**: Modern Go with database/sql interface
+- **DuckDB**: Native Go client (`github.com/marcboeker/go-duckdb`)
+- **Apache Iceberg**: REST catalog and table format
+- **Docker**: For Iceberg REST Catalog
+
+## 📈 Performance
+
+- **Native Go**: No subprocess overhead
+- **DuckDB Integration**: Fast Parquet processing
+- **Iceberg Format**: Efficient columnar storage
+- **Schema Evolution**: Handle changing data structures
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run `just fmt` and `just test`
+5. Submit a pull request
+
+## 📝 License
+
+This project is licensed under the MIT License.
+
+---
+
+**Ready to process your data?** Start with `just full-workflow` and turn your CSV files into queryable Iceberg tables! 🚀

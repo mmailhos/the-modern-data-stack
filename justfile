@@ -1,161 +1,72 @@
-# Altertable - A Go application for loading parquet files into DuckDB
-# Available commands:
-#   just build    - Build the application
-#   just run      - Run the application
-#   just clean    - Clean build artifacts
-#   just test     - Run tests
-#   just fmt      - Format code
-#   just lint     - Run linter
-#   just deps     - Download dependencies
-#   just tidy     - Tidy dependencies
-#   just help     - Show this help
+# Altertable - Data Processing Pipeline
+# 
+# A comprehensive Go application for processing data through this pipeline:
+# 1. CSV → Parquet (data/source/*.csv → data/parquet/*.parquet)
+# 2. Parquet → Iceberg Tables (using REST Catalog)
+# 3. Query & Analysis (using DuckDB or other Iceberg engines)
 
-# Default recipe
+# Default recipe - show available commands
 default:
     @just --list
 
-# Build the application
+# ============================================================================
+# 📦 BUILD COMMANDS
+# ============================================================================
+
+# Build all applications
 build:
-    @echo "🔨 Building altertable..."
-    go build -o altertable .
-    @echo "✅ Build complete!"
+    @echo "🔨 Building all applications..."
+    go build -o csv-to-parquet cmd/csv_to_parquet/main.go
+    go build -o parquet-to-iceberg cmd/parquet_to_iceberg/main.go
+    go build -o create-iceberg-tables cmd/create_iceberg_tables/main.go
+    @echo "✅ All applications built successfully!"
 
-# Run the application
-run:
-    @echo "🚀 Running altertable..."
-    ./altertable
-
-# Build and run in one command
-dev: build run
-
-# Clean build artifacts
+# Clean build artifacts and generated data
 clean:
-    @echo "🧹 Cleaning build artifacts..."
-    rm -f altertable csv-to-parquet parquet-to-iceberg create-iceberg-tables-duckdb
+    @echo "🧹 Cleaning build artifacts and generated data..."
+    rm -f csv-to-parquet parquet-to-iceberg create-iceberg-tables
     rm -rf data/parquet data/iceberg_warehouse
     go clean
     @echo "✅ Clean complete!"
 
-# Run tests
-test:
-    @echo "🧪 Running tests..."
-    go test ./...
+# ============================================================================
+# 🚀 WORKFLOW COMMANDS (Main Pipeline)
+# ============================================================================
 
-# Format code
-fmt:
-    @echo "🎨 Formatting code..."
-    go fmt ./...
-    @echo "✅ Code formatted!"
-
-# Run linter (requires golangci-lint)
-lint:
-    @echo "🔍 Running linter..."
-    @if command -v golangci-lint >/dev/null 2>&1; then \
-        golangci-lint run; \
-    else \
-        echo "⚠️  golangci-lint not found. Install with: brew install golangci-lint"; \
-    fi
-
-# Download dependencies
-deps:
-    @echo "📦 Downloading dependencies..."
-    go mod download
-    @echo "✅ Dependencies downloaded!"
-
-# Tidy dependencies
-tidy:
-    @echo "🧹 Tidying dependencies..."
-    go mod tidy
-    @echo "✅ Dependencies tidied!"
-
-# Check for vulnerabilities (requires govulncheck)
-vuln:
-    @echo "🔒 Checking for vulnerabilities..."
-    @if command -v govulncheck >/dev/null 2>&1; then \
-        govulncheck ./...; \
-    else \
-        echo "⚠️  govulncheck not found. Install with: go install golang.org/x/vuln/cmd/govulncheck@latest"; \
-    fi
-
-# Create sample data directory structure
-setup-data:
-    @echo "📁 Setting up data directory..."
-    mkdir -p data
-    @echo "✅ Data directory created!"
-    @echo "📝 Place your .parquet files in the 'data' directory"
-
-# Show project info
-info:
-    @echo "📊 Project Information:"
-    @echo "  Name: altertable"
-    @echo "  Language: Go"
-    @echo "  Purpose: Load parquet files into DuckDB"
-    @echo ""
-    @echo "📁 Directory structure:"
-    @echo "  data/     - Place your .parquet files here"
-    @echo "  main.go   - Main application code"
-    @echo "  go.mod    - Go module definition"
-    @echo ""
-    @echo "🔧 Dependencies:"
-    @go list -m all | head -10
-
-# Install development tools
-install-tools:
-    @echo "🛠️  Installing development tools..."
-    go install golang.org/x/tools/cmd/goimports@latest
-    go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-    go install golang.org/x/vuln/cmd/govulncheck@latest
-    @echo "✅ Development tools installed!"
-
-# Full development setup
-setup: deps setup-data install-tools
-    @echo "🎉 Development environment setup complete!"
-
-# Release build (optimized)
-release:
-    @echo "🚀 Building release version..."
-    go build -ldflags="-s -w" -o altertable .
-    @echo "✅ Release build complete!"
-
-# Cross-compile for different platforms
-cross-compile:
-    @echo "🌍 Cross-compiling for multiple platforms..."
-    GOOS=linux GOARCH=amd64 go build -o altertable-linux-amd64 .
-    GOOS=darwin GOARCH=amd64 go build -o altertable-darwin-amd64 .
-    GOOS=darwin GOARCH=arm64 go build -o altertable-darwin-arm64 .
-    GOOS=windows GOARCH=amd64 go build -o altertable-windows-amd64.exe .
-    @echo "✅ Cross-compilation complete!"
-
-# Convert CSV files to Parquet format
+# Step 1: Convert CSV files to Parquet format
 csv-to-parquet:
-    @echo "📦 Converting CSV files to Parquet format..."
+    @echo "📦 Step 1: Converting CSV files to Parquet format..."
     go run cmd/csv_to_parquet/main.go
     @echo "✅ CSV to Parquet conversion complete!"
 
-# Create Iceberg tables from Parquet files (native Go)
+# Step 2a: Create Iceberg tables using REST API approach (recommended)
 parquet-to-iceberg:
-    @echo "🧊 Converting Parquet files to Iceberg tables..."
+    @echo "🧊 Step 2a: Converting Parquet files to Iceberg tables (REST API)..."
     @chmod +x scripts/wait_for_catalog.sh
     @scripts/wait_for_catalog.sh
     go run cmd/parquet_to_iceberg/main.go
     @echo "✅ Parquet to Iceberg conversion complete!"
 
-# Create Iceberg tables using Apache Iceberg Go library (simplified)
-create-iceberg-tables-iceberg-go:
-    @echo "🧊 Creating Iceberg tables using Apache Iceberg Go library..."
+# Step 2b: Create Iceberg tables using native DuckDB Go client (enhanced)
+create-iceberg-tables:
+    @echo "🧊 Step 2b: Creating Iceberg tables with DuckDB Go client..."
     @chmod +x scripts/wait_for_catalog.sh
     @scripts/wait_for_catalog.sh
     go run cmd/create_iceberg_tables/main.go
     @echo "✅ Iceberg tables creation complete!"
 
-# Legacy DuckDB-based Iceberg creation (deprecated - has compatibility issues)
-create-iceberg-tables-duckdb:
-    @echo "⚠️  This command uses DuckDB and may have compatibility issues"
-    @echo "💡 Consider using 'just parquet-to-iceberg' or 'just create-iceberg-tables-iceberg-go' instead"
-    @echo "❌ DuckDB approach disabled due to compatibility issues"
+# Complete workflow: CSV → Parquet → Iceberg
+full-workflow:
+    @echo "🚀 Running complete workflow: CSV → Parquet → Iceberg"
+    just check-prereqs
+    just csv-to-parquet
+    just start-iceberg-catalog
+    just create-iceberg-tables
+    @echo "🎉 Complete workflow finished!"
 
-# Alias for backward compatibility
-create-iceberg-tables: parquet-to-iceberg
+# ============================================================================
+# 🐳 ICEBERG CATALOG MANAGEMENT
+# ============================================================================
 
 # Start Iceberg REST Catalog with Docker
 start-iceberg-catalog:
@@ -195,7 +106,69 @@ status-iceberg-catalog:
         echo "💡 Run 'just start-iceberg-catalog' to start it"; \
     fi
 
-# Check prerequisites (Docker, etc.)
+# ============================================================================
+# 🔍 INSPECTION & ANALYSIS COMMANDS  
+# ============================================================================
+
+# List all available data files
+list-data:
+    @echo "📊 Data Files Overview:"
+    @echo ""
+    @echo "📁 Source CSV files:"
+    @if [ -d "data/source" ]; then \
+        find data/source -name "*.csv" -exec basename {} \; 2>/dev/null | head -10 || echo "   (no CSV files found)"; \
+    else \
+        echo "   (data/source directory not found)"; \
+    fi
+    @echo ""
+    @echo "📁 Parquet files:"
+    @if [ -d "data/parquet" ]; then \
+        find data/parquet -name "*.parquet" -exec basename {} \; 2>/dev/null | head -10 || echo "   (no Parquet files found)"; \
+    else \
+        echo "   (data/parquet directory not found - run 'just csv-to-parquet')"; \
+    fi
+    @echo ""
+    @echo "📁 Iceberg tables:"
+    @if [ -d "data/iceberg_warehouse/my_data" ]; then \
+        ls data/iceberg_warehouse/my_data/ 2>/dev/null || echo "   (no Iceberg tables found)"; \
+    else \
+        echo "   (no Iceberg warehouse found - run 'just create-iceberg-tables')"; \
+    fi
+
+# Query Iceberg tables using DuckDB
+query-iceberg table_name:
+    @echo "🦆 Querying Iceberg table: {{table_name}}"
+    duckdb -c "LOAD iceberg; SET unsafe_enable_version_guessing = true; SELECT * FROM iceberg_scan('data/iceberg_warehouse/my_data/{{table_name}}') LIMIT 10;"
+
+# Show schema of an Iceberg table
+describe-iceberg table_name:
+    @echo "📋 Schema of Iceberg table: {{table_name}}"
+    duckdb -c "LOAD iceberg; SET unsafe_enable_version_guessing = true; DESCRIBE SELECT * FROM iceberg_scan('data/iceberg_warehouse/my_data/{{table_name}}');"
+
+# ============================================================================
+# 🛠️ DEVELOPMENT COMMANDS
+# ============================================================================
+
+# Download and tidy dependencies
+deps:
+    @echo "📦 Managing dependencies..."
+    go mod download
+    go mod tidy
+    @echo "✅ Dependencies ready!"
+
+# Format code
+fmt:
+    @echo "🎨 Formatting code..."
+    go fmt ./...
+    @echo "✅ Code formatted!"
+
+# Run tests
+test:
+    @echo "🧪 Running tests..."
+    go test ./...
+    @echo "✅ Tests complete!"
+
+# Check prerequisites (Docker, DuckDB, etc.)
 check-prereqs:
     @echo "🔍 Checking prerequisites..."
     @chmod +x scripts/check_docker.sh
@@ -203,66 +176,94 @@ check-prereqs:
     @echo ""
     @scripts/check_docker.sh catalog
 
-# Full workflow: CSV -> Parquet -> Iceberg
-full-workflow:
-    @echo "🚀 Running full workflow: CSV -> Parquet -> Iceberg"
-    just check-prereqs
-    just csv-to-parquet
-    just start-iceberg-catalog
-    just parquet-to-iceberg
-    @echo "🎉 Full workflow complete!"
+# Setup data directories
+setup-data:
+    @echo "📁 Setting up data directories..."
+    mkdir -p data/source data/parquet data/iceberg_warehouse
+    @echo "✅ Data directories created!"
+    @echo "📝 Place your CSV files in 'data/source/' directory"
 
-# Build all converters
-build-converters:
-    @echo "🔨 Building all converters..."
-    go build -o csv-to-parquet cmd/csv_to_parquet/main.go
-    go build -o parquet-to-iceberg cmd/parquet_to_iceberg/main.go
-    go build -o create-iceberg-tables-duckdb cmd/create_iceberg_tables/main.go
-    @echo "✅ All converters built!"
+# ============================================================================
+# ℹ️ HELP & INFO COMMANDS
+# ============================================================================
 
-# Show help
+# Show comprehensive help
 help:
-    @echo "🔧 Altertable - Data processing with DuckDB, Parquet & Iceberg"
+    @echo "🔧 Altertable - Data Processing Pipeline"
     @echo ""
-    @echo "Usage: just <command>"
+    @echo "📋 WORKFLOW OVERVIEW:"
+    @echo "  1. Place CSV files in data/source/"
+    @echo "  2. Run: just csv-to-parquet"
+    @echo "  3. Run: just start-iceberg-catalog"
+    @echo "  4. Run: just create-iceberg-tables"
+    @echo "  5. Query with DuckDB or other Iceberg engines"
     @echo ""
-    @echo "🔨 Build Commands:"
-    @echo "  build              Build the main application"
-    @echo "  build-converters   Build all converter tools"
-    @echo "  release            Build optimized release version"
-    @echo "  cross-compile      Build for multiple platforms"
+    @echo "🚀 QUICK START:"
+    @echo "  just full-workflow     # Complete pipeline"
+    @echo "  just list-data         # See what data you have"
+    @echo "  just help-examples     # Show query examples"
     @echo ""
-    @echo "🚀 Run Commands:"
-    @echo "  run                Run the parquet loader"
-    @echo "  dev                Build and run in one command"
-    @echo "  csv-to-parquet     Convert CSV files to Parquet format"
-    @echo "  parquet-to-iceberg Convert Parquet files to Iceberg tables (REST API approach)"
-    @echo "  create-iceberg-tables-iceberg-go Create Iceberg tables using Apache Iceberg Go library"
-    @echo "  create-iceberg-tables Alias for parquet-to-iceberg (backward compatibility)"
-    @echo "  full-workflow      Complete CSV -> Parquet -> Iceberg workflow"
+    @echo "📦 MAIN COMMANDS:"
+    @echo "  csv-to-parquet         # Convert CSV → Parquet"
+    @echo "  create-iceberg-tables  # Create Iceberg tables (recommended)"
+    @echo "  parquet-to-iceberg     # Alternative Iceberg approach"
     @echo ""
-    @echo "🐳 Docker Commands:"
-    @echo "  start-iceberg-catalog Start Iceberg REST Catalog with Docker"
-    @echo "  stop-iceberg-catalog  Stop Iceberg REST Catalog"
-    @echo "  status-iceberg-catalog Check Iceberg REST Catalog status"
+    @echo "🐳 CATALOG MANAGEMENT:"
+    @echo "  start-iceberg-catalog  # Start REST catalog"
+    @echo "  status-iceberg-catalog # Check catalog status"
+    @echo "  stop-iceberg-catalog   # Stop catalog"
     @echo ""
-    @echo "🛠️  Development Commands:"
-    @echo "  clean              Clean build artifacts and generated files"
-    @echo "  test               Run tests"
-    @echo "  fmt                Format code"
-    @echo "  lint               Run linter"
-    @echo "  deps               Download dependencies"
-    @echo "  tidy               Tidy dependencies"
-    @echo "  vuln               Check for vulnerabilities"
-    @echo "  setup-data         Create data directory"
-    @echo "  info               Show project information"
-    @echo "  install-tools      Install development tools"
-    @echo "  setup              Full development setup"
-    @echo "  help               Show this help"
+    @echo "🔍 DATA INSPECTION:"
+    @echo "  list-data              # Show available data files"
+    @echo "  query-iceberg <table>  # Query table with DuckDB"
+    @echo "  describe-iceberg <table> # Show table schema"
     @echo ""
-    @echo "📁 Workflow:"
-    @echo "  1. Place CSV files in the 'data' directory"
-    @echo "  2. Run 'just csv-to-parquet' → creates files in 'data/parquet/'"
-    @echo "  3. Run 'just start-iceberg-catalog' to start the catalog"
-    @echo "  4. Run 'just create-iceberg-tables' to create Iceberg tables"
-    @echo "  Or use 'just full-workflow' to do all steps automatically" 
+    @echo "🛠️ DEVELOPMENT:"
+    @echo "  build                  # Build all applications"
+    @echo "  clean                  # Clean generated files"
+    @echo "  deps                   # Manage dependencies"
+    @echo "  fmt                    # Format code"
+
+# Show query examples
+help-examples:
+    @echo "🔍 Query Examples:"
+    @echo ""
+    @echo "📊 List all Iceberg tables:"
+    @echo "  just list-data"
+    @echo ""
+    @echo "📋 Show table schema:"
+    @echo "  just describe-iceberg transactions_sample"
+    @echo ""
+    @echo "🔍 Query table data:"
+    @echo "  just query-iceberg transactions_sample"
+    @echo ""
+    @echo "🦆 Direct DuckDB queries:"
+    @echo "  duckdb -c \"LOAD iceberg; SET unsafe_enable_version_guessing = true; \\"
+    @echo "    SELECT COUNT(*) FROM iceberg_scan('data/iceberg_warehouse/my_data/transactions_sample');\""
+    @echo ""
+    @echo "📈 Advanced queries:"
+    @echo "  duckdb -c \"LOAD iceberg; SET unsafe_enable_version_guessing = true; \\"
+    @echo "    SELECT departement, AVG(prix) as avg_price \\"
+    @echo "    FROM iceberg_scan('data/iceberg_warehouse/my_data/transactions_sample') \\"
+    @echo "    GROUP BY departement ORDER BY avg_price DESC LIMIT 10;\""
+
+# Show project information
+info:
+    @echo "📊 Altertable Project Information"
+    @echo ""
+    @echo "🎯 Purpose: Data processing pipeline (CSV → Parquet → Iceberg)"
+    @echo "🔧 Language: Go with DuckDB integration"
+    @echo "📦 Components:"
+    @echo "  • CSV to Parquet converter"
+    @echo "  • Parquet to Iceberg table creator (2 approaches)"
+    @echo "  • DuckDB integration for querying"
+    @echo "  • Docker-based Iceberg REST Catalog"
+    @echo ""
+    @echo "📁 Directory Structure:"
+    @echo "  data/source/           - Input CSV files"
+    @echo "  data/parquet/          - Generated Parquet files"
+    @echo "  data/iceberg_warehouse/ - Iceberg table storage"
+    @echo "  cmd/                   - Go applications"
+    @echo ""
+    @echo "🔗 Dependencies:"
+    @go list -m all | head -5 
