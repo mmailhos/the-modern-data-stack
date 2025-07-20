@@ -209,7 +209,7 @@ setup-data:
 
 # Show comprehensive help
 help:
-    @echo "🔧 Altertable - Data Processing Pipeline"
+    @echo "🔧 The Modern Data Stack"
     @echo ""
     @echo "📋 WORKFLOW OVERVIEW:"
     @echo "  1. Place CSV files in data/source/"
@@ -273,7 +273,7 @@ help-examples:
 
 # Show project information
 info:
-    @echo "📊 Altertable Project Information"
+    @echo "📊 The Modern Data Stack"
     @echo ""
     @echo "🎯 Purpose: Data processing pipeline (CSV → Parquet → Iceberg)"
     @echo "🔧 Language: Go with DuckDB integration"

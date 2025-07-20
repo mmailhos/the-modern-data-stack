@@ -1,294 +1,180 @@
-# The Modern Data Sack 
+# The Modern Data Stack
 
-A comprehensive Go application for processing data through a modern analytics pipeline:
+> **Transform your CSV data into a queryable, production-ready data lakehouse**
 
-**CSV → Parquet → Iceberg Tables → Analytics**
+A comprehensive Go-based pipeline that converts CSV files into Apache Iceberg tables with automatic schema detection, powered by DuckDB and Trino.
 
-## 🎯 Overview
+## 🎯 What This Does
 
-This repo provides a complete data processing pipeline that transforms your CSV data into queryable Iceberg tables:
+**Input**: Your CSV files  
+**Output**: Queryable Iceberg data lakehouse with web-based SQL interface
 
-1. **📦 CSV to Parquet**: Convert CSV files to efficient Parquet format using DuckDB
-2. **🧊 Parquet to Iceberg**: Create Apache Iceberg tables with proper schemas
-3. **🔍 Query & Analysis**: Query tables using DuckDB, Spark, Trino, or any Iceberg-compatible engine
+```
+CSV Files → Parquet → Iceberg Tables → Analytics
+```
 
-## 🚀 Quick Start
-
-### Prerequisites
-
-- **Go 1.19+**: For building the applications
-- **Docker**: For running the Iceberg REST Catalog
-- **DuckDB**: For querying (optional, but recommended)
-
-### Complete Workflow
+## 🚀 Quick Start (2 Minutes)
 
 ```bash
-# 1. Setup and dependencies
+# 1. Clone and setup
+git clone <your-repo>
+cd the-modern-data-stack
 just deps
-just setup-data
 
-# 2. Place your CSV files in data/source/
+# 2. Add your CSV files
+cp your-data.csv data/source/
 
-# 3. Run the complete pipeline
+# 3. Run complete pipeline
 just full-workflow
 
 # 4. Query your data
-just list-data
-just query-iceberg your_table_name
+just trino-cli
+# Or visit: http://localhost:8080
 ```
 
-## 📋 Detailed Steps
+## 📊 Architecture Overview
 
-### Step 1: CSV to Parquet Conversion
-
-Convert your CSV files to efficient Parquet format:
-
-```bash
-# Place CSV files in data/source/
-# Then convert them:
-just csv-to-parquet
+```mermaid
+graph TB
+    A[📁 CSV Files<br/>data/source/] --> B[🔄 CSV to Parquet<br/>DuckDB Converter]
+    B --> C[📦 Parquet Files<br/>data/parquet/]
+    
+    C --> D[🧊 Iceberg Table Creator<br/>DuckDB Schema Inspector]
+    D --> E[📊 Iceberg Tables<br/>data/iceberg_warehouse/]
+    
+    F[🐳 Docker Compose] --> G[🗄️ Iceberg REST Catalog<br/>localhost:8181]
+    F --> H[🔍 Trino Query Engine<br/>localhost:8080]
+    
+    G --> E
+    H --> E
+    
+    E --> I[📈 Analytics & Queries]
+    C --> I
+    
+    I --> J[🦆 DuckDB<br/>Direct Parquet Access]
+    I --> K[🔍 Trino Web UI<br/>SQL Interface]
+    I --> L[📊 Business Intelligence<br/>Dashboards & Reports]
+    
+    style A fill:#e1f5fe
+    style C fill:#f3e5f5
+    style E fill:#e8f5e8
+    style F fill:#fff3e0
+    style I fill:#fce4ec
 ```
 
-**What it does:**
+The pipeline automatically transforms your data through these stages:
+
+**Stage 1: CSV → Parquet**
 - Discovers all CSV files in `data/source/`
-- Uses DuckDB to convert each CSV to Parquet
-- Stores results in `data/parquet/`
-- Shows sample data and statistics
+- Converts to efficient Parquet format using DuckDB
+- Preserves data types and handles malformed files
 
-### Step 2: Iceberg Table Creation
+**Stage 2: Parquet → Iceberg**
+- Reads actual Parquet schemas using DuckDB
+- Creates Iceberg tables with proper column types
+- Preserves nullability and field metadata
 
-Create Apache Iceberg tables from your Parquet files:
+**Stage 3: Query & Analytics**
+- Trino web interface for SQL queries
+- DuckDB for high-performance analytics
+- Compatible with Spark, dbt, and BI tools
 
+## 🐳 Services
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| **Trino Web UI** | http://localhost:8080 | Interactive SQL queries |
+| **Iceberg REST Catalog** | http://localhost:8181 | Metadata management |
+| **DuckDB CLI** | `just query-iceberg <table>` | High-performance analytics |
+
+## 📋 Commands
+
+### **Main Workflow**
 ```bash
-just start-iceberg-catalog
-just create-iceberg-tables
+just full-workflow          # Complete CSV → Iceberg pipeline
+just csv-to-parquet         # Convert CSV files to Parquet
+just create-iceberg-tables  # Create Iceberg tables with schema inspection
 ```
 
-### Step 3: Query and Analysis
-
-Query your Iceberg tables using various methods:
-
+### **Service Management**
 ```bash
-# List available tables
-just list-data
-
-# Query a specific table
-just query-iceberg transactions_sample
-
-# Show table schema
-just describe-iceberg transactions_sample
-
-# Direct DuckDB queries
-duckdb -c "LOAD iceberg; SET unsafe_enable_version_guessing = true; 
-  SELECT * FROM iceberg_scan('data/iceberg_warehouse/my_data/transactions_sample') LIMIT 10;"
+just start-services         # Start Trino + Iceberg catalog
+just stop-services          # Stop all services
+just status-services        # Check service health
+just logs [service]         # View service logs
 ```
 
-## 🏗️ Architecture
-
-### Applications
-
-- **`cmd/csv_to_parquet/`**: CSV to Parquet converter using DuckDB
-- **`cmd/create_iceberg_tables/`**: Iceberg table creator with native DuckDB Go client and schema inspection
-
-### Data Flow
-
-```
-data/source/*.csv
-       ↓ (csv-to-parquet)
-data/parquet/*.parquet
-       ↓ (create-iceberg-tables)
-data/iceberg_warehouse/my_data/*
-       ↓ (query engines)
-    Analytics & Insights
+### **Data Querying**
+```bash
+just trino-cli              # Interactive Trino SQL session
+just query-trino "SQL"      # Run single SQL query via Trino
+just query-iceberg <table>  # Query table via DuckDB
+just query-parquet <file> "SQL"  # Query Parquet directly
 ```
 
-### Directory Structure
+### **Data Inspection**
+```bash
+just list-data              # Show all available data files
+just describe-iceberg <table>  # Show table schema
+```
+
+## 🔧 Installation
+
+### **Prerequisites**
+- **Go 1.19+** (for building applications)
+- **Docker** (for Trino + Iceberg services)
+- **DuckDB** (optional, for direct querying)
+
+### **Setup**
+```bash
+# Install dependencies
+just deps
+
+# Create data directories
+just setup-data
+
+# Build applications (optional)
+just build
+```
+
+## 📁 Directory Structure
 
 ```
 the-modern-data-stack/
 ├── cmd/
 │   ├── csv_to_parquet/         # CSV → Parquet converter
-│   └── create_iceberg_tables/  # Iceberg creator with schema inspection
+│   └── create_iceberg_tables/  # Iceberg table creator
 ├── data/
-│   ├── source/                 # Input CSV files (you provide)
+│   ├── source/                 # Your CSV files (add here)
 │   ├── parquet/                # Generated Parquet files
 │   └── iceberg_warehouse/      # Iceberg table storage
-├── scripts/                    # Helper scripts
-└── justfile                    # Task automation
+├── etc/catalog/                # Trino catalog configurations
+├── docker-compose.yml          # Service orchestration
+├── justfile                    # Task automation
+└── README.md
 ```
 
-## 🔧 Available Commands
+## 💡 Example Usage
 
-### Main Workflow
-- `just csv-to-parquet` - Convert CSV files to Parquet
-- `just create-iceberg-tables` - Create Iceberg tables with schema inspection
-- `just full-workflow` - Complete pipeline automation
-
-### Catalog Management
-- `just start-iceberg-catalog` - Start Iceberg REST Catalog
-- `just status-iceberg-catalog` - Check catalog status
-- `just stop-iceberg-catalog` - Stop catalog
-
-### Data Inspection
-- `just list-data` - Show available data files
-- `just query-iceberg <table>` - Query table with DuckDB
-- `just describe-iceberg <table>` - Show table schema
-
-### Development
-- `just build` - Build all applications
-- `just clean` - Clean generated files
-- `just deps` - Manage dependencies
-- `just fmt` - Format code
-
-### Help
-- `just help` - Show comprehensive help
-- `just help-examples` - Show query examples
-- `just info` - Show project information
-
-## 📊 Example Usage
-
-### Processing Real Estate Data
+### **Real Estate Data Analysis**
 
 ```bash
-# 1. Place your CSV files
+# 1. Add your data
 cp transactions.csv data/source/
-cp properties.csv data/source/
+cp property_prices.csv data/source/
 
-# 2. Convert to Parquet
-just csv-to-parquet
-# Output: data/parquet/transactions.parquet, data/parquet/properties.parquet
-
-# 3. Create Iceberg tables
-just start-iceberg-catalog
-just create-iceberg-tables
-# Output: Iceberg tables in data/iceberg_warehouse/my_data/
-
-# 4. Query the data
-just query-iceberg transactions
-just describe-iceberg properties
-
-# 5. Advanced analytics
-duckdb -c "LOAD iceberg; SET unsafe_enable_version_guessing = true;
-  SELECT departement, AVG(prix) as avg_price 
-  FROM iceberg_scan('data/iceberg_warehouse/my_data/transactions') 
-  GROUP BY departement ORDER BY avg_price DESC LIMIT 10;"
-```
-
-## 🔍 Features
-
-### CSV to Parquet Converter
-- ✅ Automatic CSV discovery
-- ✅ DuckDB-powered conversion
-- ✅ Sample data preview
-- ✅ Error handling for malformed files
-- ✅ Progress reporting
-
-### Iceberg Creator
-- ✅ Native DuckDB Go client integration
-- ✅ Real Parquet schema reading and inspection
-- ✅ Actual sample data preview
-- ✅ Row count statistics
-- ✅ Nullability preservation
-- ✅ Type-safe operations
-- ✅ Comprehensive error handling
-
-### Query Integration
-- ✅ DuckDB Iceberg extension support
-- ✅ Schema inspection commands
-- ✅ Sample query helpers
-- ✅ Compatible with Spark, Trino, etc.
-
-## 🐳 Docker Integration
-
-The Iceberg REST Catalog runs in Docker with proper configuration:
-
-```bash
-# Automatically configured with:
-# - Persistent warehouse storage
-# - Proper environment variables
-# - Health checking
-```
-
-## 🐳 Docker Compose Setup
-
-The project includes a comprehensive Docker Compose configuration for easy service management.
-
-### **Quick Start with Docker Compose**
-
-```bash
-# Start all services (Trino + Iceberg REST Catalog)
-just start-services
-
-# Run the complete workflow
+# 2. Process the data
 just full-workflow
 
-# Query your data via Trino
-just query-trino "SHOW TABLES FROM my_data"
-just trino-cli  # Interactive session
-
-# Stop all services
-just stop-services
+# 3. Analyze via Trino
+just trino-cli
 ```
 
-### **Services Included**
-
-- **Trino Query Engine** (`localhost:8080`)
-  - Web UI for interactive queries
-  - SQL interface with Iceberg and Hive catalogs
-  - Health checks and automatic restart
-  
-- **Iceberg REST Catalog** (`localhost:8181`)
-  - Metadata management for Iceberg tables
-  - REST API for table operations
-  - Persistent warehouse storage
-
-### **Available Commands**
-
-```bash
-# Service Management
-just start-services      # Start all services
-just stop-services       # Stop all services  
-just status-services     # Check service status
-just restart-services    # Restart all services
-just logs [service]      # View logs (optional service name)
-
-# Data Querying
-just query-trino "SQL"   # Run SQL via Trino
-just trino-cli           # Interactive Trino session
-just query-parquet file "SQL"  # Query Parquet directly
-
-# Legacy aliases (still work)
-just start-iceberg-catalog  # → start-services
-just stop-iceberg-catalog   # → stop-services
+Then in Trino:
+```sql
+USE iceberg.my_data;
+SHOW TABLES;
 ```
-
-### **Docker Compose Features**
-
-- **Automatic networking**: Services can communicate via container names
-- **Health checks**: Ensures services are ready before dependent services start
-- **Persistent volumes**: Data survives container restarts
-- **Restart policies**: Automatic recovery from failures
-- **Port mapping**: Access services from your host machine
-
-### **Service URLs**
-
-- **Trino Web UI**: http://localhost:8080
-- **Iceberg REST API**: http://localhost:8181
-- **Service Status**: `just status-services`
-
-## 🔗 Dependencies
-
-- **Go**: Modern Go with database/sql interface
-- **DuckDB**: Native Go client (`github.com/marcboeker/go-duckdb`)
-- **Apache Iceberg**: REST catalog and table format
-- **Docker**: For Iceberg REST Catalog
-
-## 📈 Performance
-
-- **Native Go**: No subprocess overhead
-- **DuckDB Integration**: Fast Parquet processing
-- **Iceberg Format**: Efficient columnar storage
-- **Schema Evolution**: Handle changing data structures
 
 ## 🤝 Contributing
 
@@ -297,3 +183,14 @@ just stop-iceberg-catalog   # → stop-services
 3. Make your changes
 4. Run `just fmt` and `just test`
 5. Submit a pull request
+
+## 📚 Learn More
+
+- **Apache Iceberg**: https://iceberg.apache.org/
+- **Trino**: https://trino.io/
+- **DuckDB**: https://duckdb.org/
+- **Docker Compose**: https://docs.docker.com/compose/
+
+---
+
+**Built with ❤️ for modern data teams**
