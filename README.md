@@ -1,4 +1,4 @@
-# Altertable - Data Processing Pipeline
+# The Modern Data Sack 
 
 A comprehensive Go application for processing data through a modern analytics pipeline:
 
@@ -6,7 +6,7 @@ A comprehensive Go application for processing data through a modern analytics pi
 
 ## 🎯 Overview
 
-Altertable provides a complete data processing pipeline that transforms your CSV data into queryable Iceberg tables:
+This repo provides a complete data processing pipeline that transforms your CSV data into queryable Iceberg tables:
 
 1. **📦 CSV to Parquet**: Convert CSV files to efficient Parquet format using DuckDB
 2. **🧊 Parquet to Iceberg**: Create Apache Iceberg tables with proper schemas
@@ -65,23 +65,11 @@ just start-iceberg-catalog
 just create-iceberg-tables
 ```
 
-**Features:**
-- Uses native DuckDB Go client for schema reading
-- Reads actual Parquet schemas (not templates)
-- Shows real sample data with row counts
-- Preserves nullability constraints
-- Better error handling and performance
-
 #### Option B: REST API Approach
 ```bash
 just start-iceberg-catalog
 just parquet-to-iceberg
 ```
-
-**Features:**
-- Direct REST API communication
-- Template-based schema creation
-- Lightweight implementation
 
 ### Step 3: Query and Analysis
 
@@ -125,7 +113,7 @@ data/iceberg_warehouse/my_data/*
 ### Directory Structure
 
 ```
-altertable/
+the-modern-data-stack/
 ├── cmd/
 │   ├── csv_to_parquet/         # CSV → Parquet converter
 │   ├── create_iceberg_tables/  # Enhanced Iceberg creator
@@ -252,11 +240,3 @@ The Iceberg REST Catalog runs in Docker with proper configuration:
 3. Make your changes
 4. Run `just fmt` and `just test`
 5. Submit a pull request
-
-## 📝 License
-
-This project is licensed under the MIT License.
-
----
-
-**Ready to process your data?** Start with `just full-workflow` and turn your CSV files into queryable Iceberg tables! 🚀

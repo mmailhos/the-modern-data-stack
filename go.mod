@@ -1,4 +1,4 @@
-module altertable
+module the-modern-data-stack
 
 go 1.24.5
 
