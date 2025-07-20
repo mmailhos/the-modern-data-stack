@@ -1,4 +1,4 @@
-# Altertable - Data Processing Pipeline
+# The Modern Data Stack
 # 
 # A comprehensive Go application for processing data through this pipeline:
 # 1. CSV → Parquet (data/source/*.csv → data/parquet/*.parquet)
