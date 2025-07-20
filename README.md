@@ -57,18 +57,11 @@ just csv-to-parquet
 
 ### Step 2: Iceberg Table Creation
 
-Create Apache Iceberg tables from your Parquet files. Choose one approach:
+Create Apache Iceberg tables from your Parquet files:
 
-#### Option A: Enhanced DuckDB Approach (Recommended)
 ```bash
 just start-iceberg-catalog
 just create-iceberg-tables
-```
-
-#### Option B: REST API Approach
-```bash
-just start-iceberg-catalog
-just parquet-to-iceberg
 ```
 
 ### Step 3: Query and Analysis
@@ -95,8 +88,7 @@ duckdb -c "LOAD iceberg; SET unsafe_enable_version_guessing = true;
 ### Applications
 
 - **`cmd/csv_to_parquet/`**: CSV to Parquet converter using DuckDB
-- **`cmd/create_iceberg_tables/`**: Enhanced Iceberg table creator with native DuckDB Go client
-- **`cmd/parquet_to_iceberg/`**: Alternative REST API-based Iceberg creator
+- **`cmd/create_iceberg_tables/`**: Iceberg table creator with native DuckDB Go client and schema inspection
 
 ### Data Flow
 
@@ -116,8 +108,7 @@ data/iceberg_warehouse/my_data/*
 the-modern-data-stack/
 ├── cmd/
 │   ├── csv_to_parquet/         # CSV → Parquet converter
-│   ├── create_iceberg_tables/  # Enhanced Iceberg creator
-│   └── parquet_to_iceberg/     # Alternative Iceberg creator
+│   └── create_iceberg_tables/  # Iceberg creator with schema inspection
 ├── data/
 │   ├── source/                 # Input CSV files (you provide)
 │   ├── parquet/                # Generated Parquet files
@@ -130,8 +121,7 @@ the-modern-data-stack/
 
 ### Main Workflow
 - `just csv-to-parquet` - Convert CSV files to Parquet
-- `just create-iceberg-tables` - Create Iceberg tables (recommended)
-- `just parquet-to-iceberg` - Alternative Iceberg approach
+- `just create-iceberg-tables` - Create Iceberg tables with schema inspection
 - `just full-workflow` - Complete pipeline automation
 
 ### Catalog Management
@@ -193,14 +183,14 @@ duckdb -c "LOAD iceberg; SET unsafe_enable_version_guessing = true;
 - ✅ Error handling for malformed files
 - ✅ Progress reporting
 
-### Enhanced Iceberg Creator
+### Iceberg Creator
 - ✅ Native DuckDB Go client integration
-- ✅ Real Parquet schema reading
+- ✅ Real Parquet schema reading and inspection
 - ✅ Actual sample data preview
 - ✅ Row count statistics
 - ✅ Nullability preservation
 - ✅ Type-safe operations
-- ✅ Better error handling
+- ✅ Comprehensive error handling
 
 ### Query Integration
 - ✅ DuckDB Iceberg extension support

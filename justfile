@@ -17,14 +17,13 @@ default:
 build:
     @echo "🔨 Building all applications..."
     go build -o csv-to-parquet cmd/csv_to_parquet/main.go
-    go build -o parquet-to-iceberg cmd/parquet_to_iceberg/main.go
     go build -o create-iceberg-tables cmd/create_iceberg_tables/main.go
     @echo "✅ All applications built successfully!"
 
 # Clean build artifacts and generated data
 clean:
     @echo "🧹 Cleaning build artifacts and generated data..."
-    rm -f csv-to-parquet parquet-to-iceberg create-iceberg-tables
+    rm -f csv-to-parquet create-iceberg-tables
     rm -rf data/parquet data/iceberg_warehouse
     go clean
     @echo "✅ Clean complete!"
@@ -39,17 +38,9 @@ csv-to-parquet:
     go run cmd/csv_to_parquet/main.go
     @echo "✅ CSV to Parquet conversion complete!"
 
-# Step 2a: Create Iceberg tables using REST API approach (recommended)
-parquet-to-iceberg:
-    @echo "🧊 Step 2a: Converting Parquet files to Iceberg tables (REST API)..."
-    @chmod +x scripts/wait_for_catalog.sh
-    @scripts/wait_for_catalog.sh
-    go run cmd/parquet_to_iceberg/main.go
-    @echo "✅ Parquet to Iceberg conversion complete!"
-
-# Step 2b: Create Iceberg tables using native DuckDB Go client (enhanced)
+# Step 2: Create Iceberg tables using native DuckDB Go client
 create-iceberg-tables:
-    @echo "🧊 Step 2b: Creating Iceberg tables with DuckDB Go client..."
+    @echo "🧊 Step 2: Creating Iceberg tables with DuckDB Go client..."
     @chmod +x scripts/wait_for_catalog.sh
     @scripts/wait_for_catalog.sh
     go run cmd/create_iceberg_tables/main.go
@@ -205,8 +196,7 @@ help:
     @echo ""
     @echo "📦 MAIN COMMANDS:"
     @echo "  csv-to-parquet         # Convert CSV → Parquet"
-    @echo "  create-iceberg-tables  # Create Iceberg tables (recommended)"
-    @echo "  parquet-to-iceberg     # Alternative Iceberg approach"
+    @echo "  create-iceberg-tables  # Create Iceberg tables with schema inspection"
     @echo ""
     @echo "🐳 CATALOG MANAGEMENT:"
     @echo "  start-iceberg-catalog  # Start REST catalog"
