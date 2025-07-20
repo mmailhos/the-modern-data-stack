@@ -1,0 +1,54 @@
+services:
+  # Iceberg REST Catalog
+  iceberg-rest:
+    image: tabulario/iceberg-rest
+    container_name: iceberg-rest
+    ports:
+      - "8181:8181"
+    environment:
+      - CATALOG_WAREHOUSE=/var/lib/iceberg/warehouse
+      - CATALOG_IO__IMPL=org.apache.iceberg.hadoop.HadoopFileIO
+    volumes:
+      - ./data/iceberg_warehouse:/var/lib/iceberg/warehouse
+    networks:
+      - iceberg-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "sleep 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Trino Query Engine
+  trino:
+    image: trinodb/trino
+    container_name: trino
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./etc/catalog:/etc/trino/catalog
+      - ./data/iceberg_warehouse:/var/lib/iceberg/warehouse
+      - ./data/parquet:/var/lib/trino/parquet
+    networks:
+      - iceberg-net
+    depends_on:
+      iceberg-rest:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/v1/info || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  iceberg-net:
+    driver: bridge
+
+volumes:
+  iceberg_warehouse:
+    driver: local
+  parquet_data:
+    driver: local 

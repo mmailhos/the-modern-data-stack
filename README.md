@@ -209,6 +209,73 @@ The Iceberg REST Catalog runs in Docker with proper configuration:
 # - Health checking
 ```
 
+## 🐳 Docker Compose Setup
+
+The project includes a comprehensive Docker Compose configuration for easy service management.
+
+### **Quick Start with Docker Compose**
+
+```bash
+# Start all services (Trino + Iceberg REST Catalog)
+just start-services
+
+# Run the complete workflow
+just full-workflow
+
+# Query your data via Trino
+just query-trino "SHOW TABLES FROM my_data"
+just trino-cli  # Interactive session
+
+# Stop all services
+just stop-services
+```
+
+### **Services Included**
+
+- **Trino Query Engine** (`localhost:8080`)
+  - Web UI for interactive queries
+  - SQL interface with Iceberg and Hive catalogs
+  - Health checks and automatic restart
+  
+- **Iceberg REST Catalog** (`localhost:8181`)
+  - Metadata management for Iceberg tables
+  - REST API for table operations
+  - Persistent warehouse storage
+
+### **Available Commands**
+
+```bash
+# Service Management
+just start-services      # Start all services
+just stop-services       # Stop all services  
+just status-services     # Check service status
+just restart-services    # Restart all services
+just logs [service]      # View logs (optional service name)
+
+# Data Querying
+just query-trino "SQL"   # Run SQL via Trino
+just trino-cli           # Interactive Trino session
+just query-parquet file "SQL"  # Query Parquet directly
+
+# Legacy aliases (still work)
+just start-iceberg-catalog  # → start-services
+just stop-iceberg-catalog   # → stop-services
+```
+
+### **Docker Compose Features**
+
+- **Automatic networking**: Services can communicate via container names
+- **Health checks**: Ensures services are ready before dependent services start
+- **Persistent volumes**: Data survives container restarts
+- **Restart policies**: Automatic recovery from failures
+- **Port mapping**: Access services from your host machine
+
+### **Service URLs**
+
+- **Trino Web UI**: http://localhost:8080
+- **Iceberg REST API**: http://localhost:8181
+- **Service Status**: `just status-services`
+
 ## 🔗 Dependencies
 
 - **Go**: Modern Go with database/sql interface

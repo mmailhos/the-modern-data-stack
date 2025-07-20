@@ -41,6 +41,7 @@ csv-to-parquet:
 # Step 2: Create Iceberg tables using native DuckDB Go client
 create-iceberg-tables:
     @echo "🧊 Step 2: Creating Iceberg tables with DuckDB Go client..."
+    @echo "⏳ Waiting for services to be ready..."
     @chmod +x scripts/wait_for_catalog.sh
     @scripts/wait_for_catalog.sh
     go run cmd/create_iceberg_tables/main.go
@@ -51,7 +52,7 @@ full-workflow:
     @echo "🚀 Running complete workflow: CSV → Parquet → Iceberg"
     just check-prereqs
     just csv-to-parquet
-    just start-iceberg-catalog
+    just start-services
     just create-iceberg-tables
     @echo "🎉 Complete workflow finished!"
 
@@ -59,43 +60,53 @@ full-workflow:
 # 🐳 ICEBERG CATALOG MANAGEMENT
 # ============================================================================
 
-# Start Iceberg REST Catalog with Docker
-start-iceberg-catalog:
-    @echo "🐳 Starting Iceberg REST Catalog..."
-    @mkdir -p data/iceberg_warehouse
-    @if docker ps --format "table {{{{.Names}}}}" | grep -q "iceberg-rest"; then \
-        echo "✅ Iceberg REST Catalog is already running at http://localhost:8181"; \
-    else \
-        docker run -d --rm \
-            -p 8181:8181 \
-            -v $(PWD)/data/iceberg_warehouse:/var/lib/iceberg/warehouse \
-            -e CATALOG_WAREHOUSE=/var/lib/iceberg/warehouse \
-            -e CATALOG_IO__IMPL=org.apache.iceberg.hadoop.HadoopFileIO \
-            --name iceberg-rest \
-            tabulario/iceberg-rest && \
-        echo "✅ Iceberg REST Catalog started at http://localhost:8181"; \
-    fi
-    @echo "📁 Warehouse location: ./data/iceberg_warehouse"
+# Start all services (Iceberg REST Catalog + Trino)
+start-services:
+    @echo "🐳 Starting all services with Docker Compose..."
+    @mkdir -p data/iceberg_warehouse data/parquet
+    docker compose up -d
+    @echo "✅ Services started:"
+    @echo "   - Iceberg REST Catalog: http://localhost:8181"
+    @echo "   - Trino Query Engine: http://localhost:8080"
+    @echo "📁 Data locations:"
+    @echo "   - Warehouse: ./data/iceberg_warehouse"
+    @echo "   - Parquet files: ./data/parquet"
 
-# Stop Iceberg REST Catalog
-stop-iceberg-catalog:
-    @echo "🛑 Stopping Iceberg REST Catalog..."
-    @if docker ps --format "table {{{{.Names}}}}" | grep -q "iceberg-rest"; then \
-        docker stop iceberg-rest && echo "✅ Iceberg REST Catalog stopped"; \
+# Stop all services
+stop-services:
+    @echo "🛑 Stopping all services..."
+    docker compose down
+    @echo "✅ All services stopped"
+
+# Check services status
+status-services:
+    @echo "📊 Services Status:"
+    docker compose ps
+    @echo ""
+    @echo "🔗 Service URLs:"
+    @echo "   - Trino Web UI: http://localhost:8080"
+    @echo "   - Iceberg REST API: http://localhost:8181"
+
+# View service logs
+logs service="":
+    @if [ "{{service}}" = "" ]; then \
+        echo "📋 Showing logs for all services:"; \
+        docker compose logs -f; \
     else \
-        echo "ℹ️  Iceberg REST Catalog is not running"; \
+        echo "📋 Showing logs for {{service}}:"; \
+        docker compose logs -f {{service}}; \
     fi
 
-# Check Iceberg REST Catalog status
-status-iceberg-catalog:
-    @echo "📊 Iceberg REST Catalog Status:"
-    @if docker ps --format "table {{{{.Names}}}}" | grep -q "iceberg-rest"; then \
-        echo "✅ Running at http://localhost:8181"; \
-        docker ps --filter name=iceberg-rest; \
-    else \
-        echo "❌ Not running"; \
-        echo "💡 Run 'just start-iceberg-catalog' to start it"; \
-    fi
+# Restart services
+restart-services:
+    @echo "🔄 Restarting all services..."
+    docker compose restart
+    @echo "✅ Services restarted"
+
+# Legacy aliases for backward compatibility
+start-iceberg-catalog: start-services
+stop-iceberg-catalog: stop-services
+status-iceberg-catalog: status-services
 
 # ============================================================================
 # 🔍 INSPECTION & ANALYSIS COMMANDS  
@@ -135,6 +146,24 @@ query-iceberg table_name:
 describe-iceberg table_name:
     @echo "📋 Schema of Iceberg table: {{table_name}}"
     duckdb -c "LOAD iceberg; SET unsafe_enable_version_guessing = true; DESCRIBE SELECT * FROM iceberg_scan('data/iceberg_warehouse/my_data/{{table_name}}');"
+
+# Query data via Trino
+query-trino query:
+    @echo "🔍 Running Trino query: {{query}}"
+    docker compose exec trino trino --server localhost:8080 --catalog iceberg --execute "{{query}}" | cat
+
+# Interactive Trino session
+trino-cli:
+    @echo "🔍 Starting interactive Trino session..."
+    @echo "💡 Available catalogs: iceberg, hive, system"
+    @echo "💡 Use 'USE iceberg.my_data;' to access your tables"
+    @echo "💡 Type 'quit;' to exit"
+    docker compose exec trino trino --server localhost:8080
+
+# Query Parquet files directly via DuckDB (provide full SQL after SELECT)
+query-parquet file query:
+    @echo "🦆 Querying Parquet file: {{file}}"
+    duckdb -c "{{query}} FROM read_parquet('data/parquet/{{file}}.parquet');"
 
 # ============================================================================
 # 🛠️ DEVELOPMENT COMMANDS
@@ -198,15 +227,20 @@ help:
     @echo "  csv-to-parquet         # Convert CSV → Parquet"
     @echo "  create-iceberg-tables  # Create Iceberg tables with schema inspection"
     @echo ""
-    @echo "🐳 CATALOG MANAGEMENT:"
-    @echo "  start-iceberg-catalog  # Start REST catalog"
-    @echo "  status-iceberg-catalog # Check catalog status"
-    @echo "  stop-iceberg-catalog   # Stop catalog"
+    @echo "🐳 SERVICES MANAGEMENT:"
+    @echo "  start-services         # Start all services (Trino + Iceberg)"
+    @echo "  stop-services          # Stop all services"
+    @echo "  status-services        # Check services status"
+    @echo "  restart-services       # Restart all services"
+    @echo "  logs [service]         # View service logs"
     @echo ""
     @echo "🔍 DATA INSPECTION:"
     @echo "  list-data              # Show available data files"
     @echo "  query-iceberg <table>  # Query table with DuckDB"
     @echo "  describe-iceberg <table> # Show table schema"
+    @echo "  query-trino <query>    # Run SQL query via Trino"
+    @echo "  trino-cli              # Interactive Trino session"
+    @echo "  query-parquet <file> <query> # Query Parquet directly"
     @echo ""
     @echo "🛠️ DEVELOPMENT:"
     @echo "  build                  # Build all applications"
